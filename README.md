@@ -21,7 +21,8 @@ easy case), so the example reflects realistic output quality on this
 hardware.
 
 ![video-splat-gdrive-20261031 rendered](examples/video-splat-gdrive-20261031.png)
-*Rendered directly from the browser viewer — real output, not a mockup.*
+*Rendered directly from the browser viewer at a fixed camera position
+(`@-2.434,0.045,1.154,1.94,-0.23,1.333`) — real output, not a mockup.*
 
 ## Requirements
 
