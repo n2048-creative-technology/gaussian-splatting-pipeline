@@ -1,0 +1,15 @@
+services:
+  gs-gallery:
+    build: .
+    container_name: gs-gallery
+    restart: unless-stopped
+    # Bound to all interfaces so the gallery is reachable from any
+    # LAN/VPN host, not just localhost -- put a reverse proxy with TLS
+    # in front of this for any public-facing deployment.
+    ports:
+      - "8909:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost/manifest.json"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

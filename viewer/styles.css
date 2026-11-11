@@ -1,0 +1,1019 @@
+@font-face {
+  font-family: "system-serif";
+  src: local("Georgia");
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: #000;
+  color: #f4f4f2;
+  font-family: -apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+  overflow: hidden;
+}
+
+#splat-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: #0a0a0a;
+}
+
+.splat-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 1.1s ease;
+  pointer-events: none; /* only the active layer re-enables pointer events */
+}
+
+.splat-layer.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.splat-layer canvas {
+  display: block;
+}
+
+#splat-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.7s ease;
+}
+
+#splat-loading.done {
+  opacity: 0;
+}
+
+.splat-loading-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid rgba(244,244,242,0.15);
+  border-top-color: rgba(244,244,242,0.65);
+  animation: splat-spin 1s linear infinite;
+}
+
+@keyframes splat-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splat-loading-spinner { animation: none; opacity: 0.5; }
+}
+
+/* ---- Hamburger "toggle splat list" button --------------------------- */
+
+#menu-overview-btn {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 4;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(244, 244, 242, 0.18);
+  border-radius: 8px;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+#menu-overview-btn span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: #ffffff;
+  border-radius: 1px;
+}
+
+#menu-overview-btn:hover {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+#menu-overview-btn:active {
+  transform: scale(0.94);
+}
+
+#menu-overview-btn:focus-visible {
+  outline: 2px solid rgba(244, 244, 242, 0.6);
+  outline-offset: 2px;
+}
+
+/* ---- Toggleable splat list -------------------------------------------
+   Plain HTML links (built dynamically from manifest.json — see
+   buildMenuList() in gallery.js), toggled open/closed by the hamburger
+   button. Fades in/out rather than a hard show/hide, and ignores
+   pointer events while closed so it never blocks clicks on the 3D
+   scene underneath. */
+#menu-list {
+  position: absolute;
+  top: 78px;
+  left: 24px;
+  z-index: 4;
+  min-width: 200px;
+  max-width: 280px;
+  /* Cap the panel height to the viewport so a long splat list scrolls
+     inside the menu instead of growing off-screen (unreachable items
+     below the fold otherwise -- the original bug). */
+  max-height: calc(100vh - 110px);
+  padding: 14px 18px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(244, 244, 242, 0.14);
+  border-radius: 10px;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  /* The panel itself scrolls; children (ul) are not fixed-height so
+     normal block flow + overflow handles arbitrarily long lists. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+#menu-list.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Thin, unobtrusive scrollbar matching the dark glass panel look. */
+#menu-list::-webkit-scrollbar {
+  width: 6px;
+}
+#menu-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+#menu-list::-webkit-scrollbar-thumb {
+  background: rgba(244, 244, 242, 0.25);
+  border-radius: 3px;
+}
+#menu-list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 244, 242, 0.25) transparent;
+}
+
+#menu-list ul {
+  list-style: none;
+}
+
+#menu-list li + li {
+  margin-top: 10px;
+}
+
+#menu-list a {
+  display: block;
+  color: #f4f4f2;
+  text-decoration: none;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+  opacity: 0.85;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+#menu-list a.current {
+  color: #ff2a2a;
+  opacity: 1;
+  pointer-events: none;
+}
+
+#menu-list a:hover,
+#menu-list a:focus-visible {
+  color: #ff2a2a;
+  opacity: 1;
+}
+
+#menu-list .menu-date {
+  display: block;
+  font-size: 0.7rem;
+  opacity: 0.5;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #menu-list { transition: opacity 0.35s ease; transform: none; }
+}
+
+/* ---- Top-right "download current splat" button ----------------------- */
+
+#download-btn {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 4;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(244, 244, 242, 0.18);
+  border-radius: 8px;
+  color: #f4f4f2;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+#download-btn:hover {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+#download-btn:active {
+  transform: scale(0.94);
+}
+
+#download-btn:focus-visible {
+  outline: 2px solid rgba(244, 244, 242, 0.6);
+  outline-offset: 2px;
+}
+
+#download-btn[disabled] {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+#download-menu {
+  position: absolute;
+  top: 78px;
+  right: 24px;
+  /* Higher than #auto-orbit-btn (z-index 4), which sits at this exact
+     top/right position too -- without this the pause/play button (later
+     in DOM order, so it wins ties) painted over the open menu, making
+     the PNG background-color picker and even the format buttons
+     underneath it unclickable. pointer-events is none while closed
+     (see .open below) so this doesn't block the orbit button at rest. */
+  z-index: 5;
+  min-width: 160px;
+  padding: 10px 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(244, 244, 242, 0.14);
+  border-radius: 10px;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+#download-menu.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+#download-menu ul {
+  list-style: none;
+}
+
+/* Scoped to ul > li > button (the format list: "Download as .ply" etc)
+   rather than a bare "#download-menu button", which was also matching
+   the PNG background swatch buttons above and blowing them up to
+   full-width/stacked instead of the intended compact 40x40 grid. */
+#download-menu ul button {
+  display: block;
+  width: 100%;
+  padding: 8px 18px;
+  background: none;
+  border: none;
+  color: #f4f4f2;
+  text-align: left;
+  font-size: 0.9rem;
+  letter-spacing: 0.03em;
+  font-family: inherit;
+  opacity: 0.85;
+  cursor: pointer;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+#download-menu ul button:hover,
+#download-menu ul button:focus-visible {
+  color: #ff2a2a;
+  opacity: 1;
+}
+
+/* ---- PNG snapshot background picker (top of download menu) -----------
+   Mobile-first: each swatch is a 40x40 tap target (>=44px including its
+   own margin/gap, meeting the commonly-cited 44px minimum touch target)
+   laid out in a flex row that wraps on narrow screens instead of forcing
+   horizontal scroll or shrinking swatches below a usable size. */
+
+#png-bg-row {
+  padding: 2px 18px 12px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(244, 244, 242, 0.14);
+}
+
+.png-bg-row-label {
+  display: block;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #f4f4f2;
+  opacity: 0.55;
+  margin-bottom: 8px;
+}
+
+#png-bg-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.png-bg-swatch {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  border: 2px solid rgba(244, 244, 242, 0.25);
+  border-radius: 8px;
+  cursor: pointer;
+  position: relative;
+  /* Big-enough, finger-friendly tap target without visually ballooning
+     the swatch itself -- the invisible padding still counts toward hit
+     area on most browsers/touch stacks. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.png-bg-swatch[aria-pressed="true"] {
+  border-color: #ff2a2a;
+  box-shadow: 0 0 0 2px rgba(255, 42, 42, 0.35);
+}
+
+.png-bg-swatch:focus-visible {
+  outline: 2px solid rgba(244, 244, 242, 0.6);
+  outline-offset: 2px;
+}
+
+/* Transparent swatch: checkerboard so it reads as "no fill" rather than
+   looking like an unstyled/broken button. */
+.png-bg-swatch-transparent {
+  background-image:
+    linear-gradient(45deg, #777 25%, transparent 25%, transparent 75%, #777 75%),
+    linear-gradient(45deg, #777 25%, transparent 25%, transparent 75%, #777 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 6px 6px;
+  background-color: #444;
+}
+
+/* Custom swatch: a <label> wrapping the real <input type="color"> so a
+   tap opens the native OS color picker directly, no extra JS handler
+   needed just to launch it. The color input itself is visually hidden
+   (not display:none, which breaks click-through on the wrapping label
+   in some mobile browsers) and the label's own background is updated in
+   JS to reflect whatever color was last picked. */
+.png-bg-swatch-custom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.png-bg-swatch-custom input[type="color"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  border: none;
+  padding: 0;
+}
+
+.png-bg-swatch-custom::after {
+  content: "+";
+  font-size: 1.1rem;
+  line-height: 1;
+  color: #f4f4f2;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.png-bg-swatch-custom[data-has-value="true"]::after {
+  content: "";
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #download-menu { transition: opacity 0.35s ease; transform: none; }
+}
+
+/* ---- Auto-orbit (automatic camera movement) toggle -------------------- */
+
+#auto-orbit-btn {
+  position: absolute;
+  top: 78px;
+  right: 24px;
+  z-index: 4;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(244, 244, 242, 0.18);
+  border-radius: 8px;
+  color: #f4f4f2;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+#auto-orbit-btn:hover {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+#auto-orbit-btn:active {
+  transform: scale(0.94);
+}
+
+#auto-orbit-btn:focus-visible {
+  outline: 2px solid rgba(244, 244, 242, 0.6);
+  outline-offset: 2px;
+}
+
+/* aria-pressed="true" == auto-orbit ON: show the pause icon (the thing
+   you'd press to stop it). aria-pressed="false" == OFF: show play + dim,
+   same convention as a media play/pause button. */
+#auto-orbit-btn .icon-play { display: none; }
+#auto-orbit-btn[aria-pressed="false"] .icon-pause { display: none; }
+#auto-orbit-btn[aria-pressed="false"] .icon-play { display: block; }
+#auto-orbit-btn[aria-pressed="false"] { opacity: 0.55; }
+
+/* ---- Current splat label (bottom-left, read-only) --------------------- */
+#current-label {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  z-index: 4;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* ---- Adjust button (color grading + clip volume) ---------------------- */
+
+#adjust-btn {
+  position: absolute;
+  top: 132px;
+  right: 24px;
+  z-index: 4;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(244, 244, 242, 0.18);
+  border-radius: 8px;
+  color: #f4f4f2;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+#adjust-btn:hover {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+#adjust-btn:active {
+  transform: scale(0.94);
+}
+
+#adjust-btn:focus-visible {
+  outline: 2px solid rgba(244, 244, 242, 0.6);
+  outline-offset: 2px;
+}
+
+#adjust-btn[aria-expanded="true"] {
+  background: rgba(0, 0, 0, 0.45);
+  border-color: #ff2a2a;
+  color: #ff2a2a;
+}
+
+#adjust-panel {
+  position: absolute;
+  top: 132px;
+  right: 78px;
+  z-index: 5;
+  width: 260px;
+  max-height: calc(100vh - 160px);
+  padding: 16px 18px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(244, 244, 242, 0.14);
+  border-radius: 10px;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 244, 242, 0.25) transparent;
+}
+
+#adjust-panel.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+#adjust-panel::-webkit-scrollbar { width: 6px; }
+#adjust-panel::-webkit-scrollbar-track { background: transparent; }
+#adjust-panel::-webkit-scrollbar-thumb {
+  background: rgba(244, 244, 242, 0.25);
+  border-radius: 3px;
+}
+
+.adjust-section + .adjust-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(244, 244, 242, 0.14);
+}
+
+.adjust-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.adjust-section-head h3 {
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  font-weight: 600;
+}
+
+.adjust-reset {
+  background: none;
+  border: 1px solid rgba(244, 244, 242, 0.25);
+  border-radius: 6px;
+  color: #f4f4f2;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.adjust-reset:hover {
+  opacity: 1;
+  color: #ff2a2a;
+  border-color: #ff2a2a;
+}
+
+.adjust-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 42px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.75rem;
+}
+
+.adjust-row span {
+  opacity: 0.75;
+}
+
+.adjust-row output {
+  text-align: right;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.adjust-row input[type="range"] {
+  width: 100%;
+  accent-color: #ff2a2a;
+}
+
+.adjust-subhead {
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.45;
+  margin: 10px 0 6px;
+}
+
+.adjust-toggle-row,
+.adjust-shape-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-bottom: 8px;
+}
+
+.adjust-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+.adjust-toggle input {
+  accent-color: #ff2a2a;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #adjust-panel { transition: opacity 0.3s ease; transform: none; }
+}
+
+@media (max-width: 520px) {
+  #adjust-panel {
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}
+
+/* ---- Keyframes button + panel (camera sequence / video export) -------- */
+
+#keyframes-btn {
+  position: absolute;
+  top: 186px;
+  right: 24px;
+  z-index: 4;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(244, 244, 242, 0.18);
+  border-radius: 8px;
+  color: #f4f4f2;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+#keyframes-btn:hover {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+#keyframes-btn:active {
+  transform: scale(0.94);
+}
+
+#keyframes-btn:focus-visible {
+  outline: 2px solid rgba(244, 244, 242, 0.6);
+  outline-offset: 2px;
+}
+
+#keyframes-btn[aria-expanded="true"] {
+  background: rgba(0, 0, 0, 0.45);
+  border-color: #ff2a2a;
+  color: #ff2a2a;
+}
+
+#keyframes-panel {
+  position: absolute;
+  top: 186px;
+  right: 78px;
+  z-index: 5;
+  width: 280px;
+  max-height: calc(100vh - 214px);
+  padding: 16px 18px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(244, 244, 242, 0.14);
+  border-radius: 10px;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 244, 242, 0.25) transparent;
+}
+
+#keyframes-panel.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+#keyframes-panel::-webkit-scrollbar { width: 6px; }
+#keyframes-panel::-webkit-scrollbar-track { background: transparent; }
+#keyframes-panel::-webkit-scrollbar-thumb {
+  background: rgba(244, 244, 242, 0.25);
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #keyframes-panel { transition: opacity 0.3s ease; transform: none; }
+}
+
+@media (max-width: 520px) {
+  #keyframes-panel {
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}
+
+.kf-hint {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  opacity: 0.55;
+  margin-bottom: 10px;
+}
+
+.kf-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kf-list-empty {
+  font-size: 0.72rem;
+  opacity: 0.4;
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.kf-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(244, 244, 242, 0.06);
+  border: 1px solid rgba(244, 244, 242, 0.12);
+  border-radius: 6px;
+  cursor: grab;
+}
+
+.kf-item.dragging {
+  opacity: 0.4;
+}
+
+.kf-item-index {
+  font-size: 0.7rem;
+  opacity: 0.45;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.kf-item-label {
+  flex: 1;
+  font-size: 0.78rem;
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  color: inherit;
+  font-family: inherit;
+  padding: 2px 0;
+}
+
+.kf-item-label:focus-visible {
+  outline: 1px solid rgba(244, 244, 242, 0.6);
+}
+
+.kf-item-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #f4f4f2;
+  opacity: 0.55;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 2px 4px;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.kf-item-btn:hover {
+  opacity: 1;
+  color: #ff2a2a;
+}
+
+.kf-item-apply-look-btn {
+  font-size: 0.78rem;
+}
+
+
+.kf-transport {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.kf-transport-btn {
+  flex: 1;
+  padding: 8px 10px;
+  background: rgba(244, 244, 242, 0.08);
+  border: 1px solid rgba(244, 244, 242, 0.2);
+  border-radius: 6px;
+  color: #f4f4f2;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.kf-transport-btn:hover:not(:disabled) {
+  background: rgba(244, 244, 242, 0.16);
+  border-color: #ff2a2a;
+}
+
+.kf-transport-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.kf-select-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.75rem;
+  margin-bottom: 12px;
+}
+
+.kf-select-row span {
+  opacity: 0.75;
+}
+
+.kf-select-row select {
+  background: rgba(244, 244, 242, 0.08);
+  border: 1px solid rgba(244, 244, 242, 0.2);
+  border-radius: 6px;
+  color: #f4f4f2;
+  font-size: 0.72rem;
+  padding: 4px 6px;
+}
+
+.kf-record-btn {
+  width: 100%;
+  padding: 10px;
+  background: #ff2a2a;
+  border: none;
+  border-radius: 6px;
+  color: #0a0a0a;
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+
+.kf-record-btn:hover:not(:disabled) {
+  background: #ff5252;
+}
+
+.kf-record-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+  background: rgba(244, 244, 242, 0.2);
+  color: #f4f4f2;
+}
+
+.kf-record-btn.recording {
+  background: #f4f4f2;
+}
+
+#kf-record-status {
+  font-size: 0.72rem;
+  opacity: 0.6;
+  margin-top: 8px;
+  min-height: 1.2em;
+}
+
+.kf-share-btn {
+  margin-top: 4px;
+  width: 100%;
+}
+
+#kf-share-status {
+  font-size: 0.72rem;
+  opacity: 0.6;
+  margin-top: 6px;
+  min-height: 1.2em;
+}
+
+.kf-apply-filters-btn {
+  margin-top: 8px;
+  width: 100%;
+}
+
+#kf-apply-filters-status {
+  font-size: 0.72rem;
+  opacity: 0.6;
+  margin-top: 6px;
+  min-height: 1.2em;
+}
+
+/* ---- Shared-sequence import banner (top-center) ------------------------ */
+
+#kf-import-banner {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-12px);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 42, 42, 0.4);
+  border-radius: 10px;
+  color: #f4f4f2;
+  font-size: 0.78rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  max-width: calc(100vw - 32px);
+}
+
+#kf-import-banner.open {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+.kf-import-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#kf-import-apply-btn {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  background: #ff2a2a;
+  border: none;
+  border-radius: 6px;
+  color: #0a0a0a;
+  font-weight: 600;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+#kf-import-apply-btn:hover {
+  background: #ff5252;
+}
+
+#kf-import-dismiss-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: #f4f4f2;
+  opacity: 0.6;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 2px 4px;
+}
+
+#kf-import-dismiss-btn:hover {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #kf-import-banner { transition: opacity 0.3s ease; transform: translateX(-50%); }
+}
+
+@media (max-width: 520px) {
+  #kf-import-banner {
+    left: 12px;
+    right: 12px;
+    transform: translateY(-12px);
+    max-width: none;
+  }
+  #kf-import-banner.open {
+    transform: translateY(0);
+  }
+  .kf-import-text {
+    white-space: normal;
+  }
+}
+
+

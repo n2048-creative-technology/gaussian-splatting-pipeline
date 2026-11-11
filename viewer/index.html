@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gaussian Splat Gallery</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="styles.css">
+<!-- gaussian-splats-3d.module.js imports THREE via the bare specifier
+     "three" (import * as THREE from 'three';). Browsers cannot resolve
+     bare module specifiers without an import map — without this block,
+     that import throws "Failed to resolve module specifier" the moment
+     gallery.js's own import of the library evaluates, which silently
+     kills the entire gallery.js module (no hamburger wiring, no spinner
+     removal, no splat ever loads — exactly a permanently stuck spinner
+     with no console-visible page crash from curl-only checks). -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "./lib/three.module.js"
+  }
+}
+</script>
+</head>
+<body>
+
+<!-- Two stacked Gaussian Splat viewer layers for crossfade transitions
+     between splats. -->
+<div id="splat-bg">
+  <div id="splat-layer-a" class="splat-layer active"></div>
+  <div id="splat-layer-b" class="splat-layer"></div>
+</div>
+
+<!-- Loading indicator: no text, just a subtle spinner while a splat
+     scene downloads/decodes. -->
+<div id="splat-loading" aria-hidden="true">
+  <div class="splat-loading-spinner"></div>
+</div>
+
+<!-- Top-left hamburger: toggles the list of every available splat
+     (built from manifest.json) — see buildMenuList() in gallery.js. -->
+<button id="menu-overview-btn" aria-label="Toggle splat list" aria-expanded="false" aria-controls="menu-list">
+  <span></span><span></span><span></span>
+</button>
+
+<nav id="menu-list" aria-hidden="true">
+  <ul></ul>
+</nav>
+
+<!-- Top-right download button: exports the splat currently on screen as
+     .ply / .splat / .ksplat — see buildDownloadMenu() in gallery.js. -->
+<button id="download-btn" aria-label="Download current splat" aria-expanded="false" aria-controls="download-menu">
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3v12"/>
+    <path d="M7 10l5 5 5-5"/>
+    <path d="M5 19h14"/>
+  </svg>
+</button>
+
+<nav id="download-menu" aria-hidden="true">
+  <!-- PNG-only background picker: a row of tappable swatches (>=44px
+       touch targets per mobile a11y guidance) instead of a checkbox +
+       tiny native color swatch, which was unusably small/fiddly on a
+       phone screen. "Custom" is a label wrapping a native <input
+       type="color"> -- tapping it opens the OS color picker directly
+       (no extra JS needed for that part), and its own swatch face then
+       reflects whatever was picked. See buildDownloadMenu()/PNG_BG_*
+       wiring in gallery.js. -->
+  <div id="png-bg-row">
+    <span class="png-bg-row-label">Background</span>
+    <div id="png-bg-swatches" role="radiogroup" aria-label="PNG snapshot background">
+      <button type="button" class="png-bg-swatch png-bg-swatch-transparent"
+              data-color="transparent" aria-label="Transparent" aria-pressed="true"></button>
+      <button type="button" class="png-bg-swatch" style="background:#ffffff"
+              data-color="#ffffff" aria-label="White" aria-pressed="false"></button>
+      <button type="button" class="png-bg-swatch" style="background:#000000"
+              data-color="#000000" aria-label="Black" aria-pressed="false"></button>
+      <button type="button" class="png-bg-swatch" style="background:#1a1a1a"
+              data-color="#1a1a1a" aria-label="Dark gray" aria-pressed="false"></button>
+      <label class="png-bg-swatch png-bg-swatch-custom" aria-label="Custom color" aria-pressed="false">
+        <input type="color" id="png-bg-color-input" value="#ff2a2a">
+      </label>
+    </div>
+  </div>
+  <ul></ul>
+</nav>
+
+<!-- Auto-orbit toggle: pauses/resumes the idle-triggered automatic camera
+     flight — see setAutoOrbitEnabled()/toggleAutoOrbit() in gallery.js.
+     Positioned next to the download button; state reflected via the
+     [data-active] attribute (CSS swaps the play/pause icon + dims when off). -->
+<button id="auto-orbit-btn" aria-label="Toggle automatic camera movement" aria-pressed="true">
+  <svg class="icon-pause" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <rect x="6" y="5" width="4" height="14"/>
+    <rect x="14" y="5" width="4" height="14"/>
+  </svg>
+  <svg class="icon-play" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M7 5l12 7-12 7V5z"/>
+  </svg>
+</button>
+
+<!-- Adjust button: opens the color-grading + clip-volume panel below.
+     Positioned under the auto-orbit button on the right edge — see
+     buildAdjustPanel()/wireAdjustPanel() in gallery.js. Icon is a simple
+     sliders glyph (three horizontal lines with knobs). -->
+<button id="adjust-btn" aria-label="Toggle color/clip adjustment panel" aria-expanded="false" aria-controls="adjust-panel">
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round">
+    <line x1="4" y1="6" x2="20" y2="6"/><circle cx="14" cy="6" r="2" fill="currentColor" stroke="none"/>
+    <line x1="4" y1="12" x2="20" y2="12"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/>
+    <line x1="4" y1="18" x2="20" y2="18"/><circle cx="17" cy="18" r="2" fill="currentColor" stroke="none"/>
+  </svg>
+</button>
+
+<!-- Adjust panel: color grading (hue/saturation/brightness/contrast/gamma)
+     and clip-volume (bounding box / sphere) controls. All markup is built
+     once here; gallery.js only wires listeners and pushes values into the
+     live splat material's shader uniforms -- see FILTERS state and
+     applyColorAdjust()/applyClipVolume() in gallery.js. -->
+<aside id="adjust-panel" aria-hidden="true">
+  <div class="adjust-panel-inner">
+
+    <section class="adjust-section">
+      <div class="adjust-section-head">
+        <h3>Color</h3>
+        <button type="button" class="adjust-reset" data-reset="color">Reset</button>
+      </div>
+      <label class="adjust-row">
+        <span>Hue</span>
+        <input type="range" id="adj-hue" min="-180" max="180" step="1" value="0">
+        <output id="adj-hue-val">0°</output>
+      </label>
+      <label class="adjust-row">
+        <span>Saturation</span>
+        <input type="range" id="adj-saturation" min="0" max="2.5" step="0.01" value="1">
+        <output id="adj-saturation-val">1.00</output>
+      </label>
+      <label class="adjust-row">
+        <span>Brightness</span>
+        <input type="range" id="adj-brightness" min="-0.5" max="0.5" step="0.01" value="0">
+        <output id="adj-brightness-val">0.00</output>
+      </label>
+      <label class="adjust-row">
+        <span>Contrast</span>
+        <input type="range" id="adj-contrast" min="0.2" max="3" step="0.01" value="1">
+        <output id="adj-contrast-val">1.00</output>
+      </label>
+      <label class="adjust-row">
+        <span>Gamma</span>
+        <input type="range" id="adj-gamma" min="0.2" max="3" step="0.01" value="1">
+        <output id="adj-gamma-val">1.00</output>
+      </label>
+    </section>
+
+    <section class="adjust-section">
+      <div class="adjust-section-head">
+        <h3>Clip volume</h3>
+        <button type="button" class="adjust-reset" data-reset="clip">Reset</button>
+      </div>
+
+      <div class="adjust-toggle-row">
+        <label class="adjust-toggle"><input type="checkbox" id="adj-clip-enabled"> Enabled</label>
+        <label class="adjust-toggle"><input type="checkbox" id="adj-clip-gizmo" checked> Show volume</label>
+        <label class="adjust-toggle"><input type="checkbox" id="adj-clip-invert"> Invert</label>
+      </div>
+
+      <div class="adjust-shape-row" role="radiogroup" aria-label="Clip volume shape">
+        <label class="adjust-toggle"><input type="radio" name="adj-clip-shape" value="box" checked> Box</label>
+        <label class="adjust-toggle"><input type="radio" name="adj-clip-shape" value="sphere"> Sphere</label>
+      </div>
+
+      <div class="adjust-subhead">Position</div>
+      <label class="adjust-row"><span>X</span><input type="range" id="adj-clip-pos-x" min="-1" max="1" step="0.001" value="0"><output id="adj-clip-pos-x-val">0.00</output></label>
+      <label class="adjust-row"><span>Y</span><input type="range" id="adj-clip-pos-y" min="-1" max="1" step="0.001" value="0"><output id="adj-clip-pos-y-val">0.00</output></label>
+      <label class="adjust-row"><span>Z</span><input type="range" id="adj-clip-pos-z" min="-1" max="1" step="0.001" value="0"><output id="adj-clip-pos-z-val">0.00</output></label>
+
+      <div class="adjust-subhead">Scale</div>
+      <label class="adjust-row"><span>X</span><input type="range" id="adj-clip-scale-x" min="0.02" max="2" step="0.001" value="1"><output id="adj-clip-scale-x-val">1.00</output></label>
+      <label class="adjust-row"><span>Y</span><input type="range" id="adj-clip-scale-y" min="0.02" max="2" step="0.001" value="1"><output id="adj-clip-scale-y-val">1.00</output></label>
+      <label class="adjust-row"><span>Z</span><input type="range" id="adj-clip-scale-z" min="0.02" max="2" step="0.001" value="1"><output id="adj-clip-scale-z-val">1.00</output></label>
+
+      <div class="adjust-subhead">Rotation</div>
+      <label class="adjust-row"><span>X</span><input type="range" id="adj-clip-rot-x" min="-180" max="180" step="1" value="0"><output id="adj-clip-rot-x-val">0°</output></label>
+      <label class="adjust-row"><span>Y</span><input type="range" id="adj-clip-rot-y" min="-180" max="180" step="1" value="0"><output id="adj-clip-rot-y-val">0°</output></label>
+      <label class="adjust-row"><span>Z</span><input type="range" id="adj-clip-rot-z" min="-180" max="180" step="1" value="0"><output id="adj-clip-rot-z-val">0°</output></label>
+    </section>
+
+  </div>
+</aside>
+
+<!-- Keyframes button: opens the camera-sequence / video-export panel.
+     Positioned under the Adjust button -- see KeyframePlayer wiring near
+     the bottom of gallery.js. Icon is a simple film/clapper glyph. -->
+<button id="keyframes-btn" aria-label="Toggle keyframe sequence panel" aria-expanded="false" aria-controls="keyframes-panel">
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="5" width="18" height="14" rx="1"/>
+    <path d="M3 9h18"/>
+    <path d="M7 5l2 4M12 5l2 4M17 5l2 4"/>
+  </svg>
+</button>
+
+<!-- Keyframes panel: capture/list/reorder camera+filter keyframes for the
+     splat currently on screen, preview the smooth-interpolated flythrough,
+     and record/download it as a video. All sequence state lives per-splat
+     (see KeyframePlayer / SEQUENCES in gallery.js) -- switching splats
+     swaps to that splat's own saved sequence automatically. -->
+<aside id="keyframes-panel" aria-hidden="true">
+  <div class="adjust-panel-inner">
+
+    <section class="adjust-section">
+      <div class="adjust-section-head">
+        <h3>Keyframes</h3>
+        <button type="button" id="kf-add-btn" class="adjust-reset" title="Capture current camera + color/clip settings as a new keyframe">+ Add</button>
+      </div>
+      <p class="kf-hint">Position the camera (and optionally color/clip settings) the way you want, then "+ Add" to capture it as a keyframe. Drag entries to reorder.</p>
+      <ol id="kf-list" class="kf-list"></ol>
+      <button type="button" id="kf-apply-filters-btn" class="kf-transport-btn kf-apply-filters-btn" disabled
+              title="Overwrite every keyframe's color/clip settings with the current Adjust panel values, keeping each keyframe's camera position unchanged">
+        Apply current look to all keyframes
+      </button>
+      <div id="kf-apply-filters-status" aria-live="polite"></div>
+      <button type="button" id="kf-share-btn" class="kf-transport-btn kf-share-btn" disabled>Copy share link</button>
+      <div id="kf-share-status" aria-live="polite"></div>
+    </section>
+
+    <section class="adjust-section">
+      <div class="adjust-section-head">
+        <h3>Playback</h3>
+      </div>
+      <label class="adjust-row">
+        <span>Hold</span>
+        <input type="range" id="kf-hold-s" min="0" max="10" step="0.1" value="2">
+        <output id="kf-hold-s-val">2.0s</output>
+      </label>
+      <label class="adjust-row">
+        <span>Transition</span>
+        <input type="range" id="kf-transition-s" min="0.5" max="12" step="0.1" value="3">
+        <output id="kf-transition-s-val">3.0s</output>
+      </label>
+      <label class="adjust-toggle"><input type="checkbox" id="kf-loop"> Loop</label>
+
+      <div class="kf-transport">
+        <button type="button" id="kf-play-btn" class="kf-transport-btn" disabled>&#9658; Preview</button>
+        <button type="button" id="kf-stop-btn" class="kf-transport-btn" disabled>&#9632; Stop</button>
+      </div>
+    </section>
+
+    <section class="adjust-section">
+      <div class="adjust-section-head">
+        <h3>Export video</h3>
+      </div>
+      <label class="adjust-row">
+        <span>FPS</span>
+        <input type="range" id="kf-fps" min="24" max="60" step="1" value="30">
+        <output id="kf-fps-val">30</output>
+      </label>
+      <label class="kf-select-row">
+        <span>Resolution</span>
+        <select id="kf-resolution">
+          <option value="canvas">Current size</option>
+          <option value="1280x720">1280x720</option>
+          <option value="1920x1080" selected>1920x1080</option>
+          <option value="2560x1440">2560x1440</option>
+        </select>
+      </label>
+      <button type="button" id="kf-record-btn" class="kf-record-btn" disabled>Record &amp; download video</button>
+      <div id="kf-record-status" aria-live="polite"></div>
+    </section>
+
+  </div>
+</aside>
+
+<!-- Shared-sequence import banner: appears when the URL hash carries a
+     "~sequence" suffix (see decodeSequenceFromUrl/maybeOfferSharedSequence-
+     Import in gallery.js) -- a friend's share link offering a camera
+     flythrough sequence to import. Never auto-applies; always requires an
+     explicit tap so a shared link can't silently clobber a sequence the
+     visitor already built for this splat. -->
+<div id="kf-import-banner" aria-hidden="true" role="status">
+  <span class="kf-import-text">Shared camera sequence available for this splat.</span>
+  <button type="button" id="kf-import-apply-btn">Import</button>
+  <button type="button" id="kf-import-dismiss-btn" aria-label="Dismiss">&#10005;</button>
+</div>
+
+<div id="current-label" aria-hidden="true"></div>
+
+<script type="module" src="gallery.js"></script>
+</body>
+</html>
