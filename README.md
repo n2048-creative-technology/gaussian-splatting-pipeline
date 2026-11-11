@@ -129,7 +129,7 @@ docker-compose.yml, Dockerfile, nginx.conf   # serving setup
 
 ## Related: style transfer
 
-See [github.com/n2048-creative-technology/sgsst-splat-style-transfer](../sgsst-splat-style-transfer)
+See [n2048-creative-technology/sgsst-splat-style-transfer](https://github.com/n2048-creative-technology/sgsst-splat-style-transfer)
 for an SGSST-based artistic style transfer pipeline that operates on
 splats trained with this repo.
 
